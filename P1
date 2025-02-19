@@ -1,0 +1,484 @@
+/*
+COP 3502C Assignment 1
+This program is written by: Katie Kwatinetz
+*/
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+// Struct Definitions
+typedef struct Player {
+    char *name; //Player name (dynamically allocated)
+    int totalGoals; //Total goals scored by the player(needs to be counted based on the match)
+}Player;
+
+typedef struct Team {
+    char *name; // Name of the team (dynamically allocated)
+    Player **players; //An array of Player pointers where each pointer is pointing to a player
+    int playerCount; // Number of players in the team
+}Team;
+
+typedef struct Goal {
+    Player *scorer; // Pointer to the player who scored
+    int time; // Time of the goal in minutes
+}Goal;
+
+typedef struct Match {
+    Team *team1; // Pointer to Team 1
+    Team *team2; // Pointer to Team 2
+    Goal *goals; // Array of goals scored in the match
+    int goalCount; // Total number of goals in the match
+} Match;
+
+typedef struct MatchWinnerTeam {
+    Team *winnerTeam; //pointer to the winner team if any.
+    int isDraw; //set to 1 if it was a draw. In that case winnerTeam will be NULL
+}MatchWinnerTeam;
+
+// Function Prototypes
+Player* createPlayer(char *name);
+Team* createTeam(char *name, int playerCount);
+Player* getPlayerByName(char *name, Player **playerList, int numPlayers);
+Team* getTeamByTeamName(Team **teamList, int numTeams, char *tname);
+void recordGoal(Match *match, Player *player, int time);
+int printHatTrickPlayers(Match *match);
+MatchWinnerTeam* getWinningTeam(Match *matches, int matchCount, char *team1Name, char *team2Name);
+Team* getChampion(Team **teamList, int teamCount, Match *matchList, int matchCount);
+void freeMemory(Team **teamList, int teamCount, Player **playerList, int playerCount, Match *matches, int matchCount);
+
+/*this fucntion dnamically allocates a player, stores the name in a dynamically
+allocated string, initializes the total goals to zero, and returns the player pointer */
+Player* createPlayer(char *name)
+{
+    //Allocate memory for a player
+    Player *player = (Player*)malloc(sizeof(Player));
+
+     //Allocate memory for the name and copy the name into it
+    player->name = (char*)malloc(strlen(name) + 1);
+    strcpy(player->name, name);
+
+     // Initialize totalGoals to zero
+    player->totalGoals = 0;
+    return player;
+}
+
+/*this function takes the team name and the number of players in the team, dynamically allocates memory for the team and the required arrays, and fills them with the corresponding information. However, while it allocates memory for the players, it does not assign the players to the team. */
+Team* createTeam(char *name, int playerCount)
+{
+    Team *team = (Team*)malloc(sizeof(Team));
+
+    // Allocate memory for the team name and copy the name into it
+    team->name = (char*)malloc(strlen(name) + 1);
+    strcpy(team->name, name);
+
+    // Allocate memory for the array of Player pointers (but do not assign players)
+    team->players = (Player**)malloc(playerCount * sizeof(Player*));
+
+    // Set the player count
+    team->playerCount = playerCount;
+    return team;
+}
+
+/*this function returns the player pointer in the playerList with the given name passed to this function. If the player is not found, it should return NULL */
+Player* getPlayerByName(char *name, Player **playerList, int numPlayers)
+{
+    for (int i = 0; i < numPlayers; i++)
+    {
+        if (strcmp(playerList[i]->name, name) == 0)
+        {
+            return playerList[i]; // Return the player pointer if names match
+        }
+    }
+    return NULL; //Player not found
+}
+
+/*this function returns the Team pointer in the teamList with the given team name passed to this function. If the team is not found, it should return NULL */
+Team* getTeamByTeamName(Team **teamList, int numTeams, char *tname)
+{
+    for (int i = 0; i < numTeams; i++)
+    {
+        if (strcmp(teamList[i]->name, tname) == 0)
+        {
+            return teamList[i]; // Return the team pointer if names match
+        }
+    }
+    return NULL; //Team not found
+}
+
+/*this function receives the reference to a match, reference to
+a player, add it to the goal list for this match, and updates necessary variables.*/
+void recordGoal(Match *match, Player *player, int time)
+{
+    // Check if this is the first goal being recorded
+    if (match->goals == NULL)
+    {
+        // Allocate memory for the first goal
+        match->goals = (Goal *)malloc(sizeof(Goal));
+        match->goalCount = 0; // Initialize the goal count
+    }
+    else
+    {
+        // Reallocate memory to add a new goal
+        match->goals = (Goal *)realloc(match->goals, (match->goalCount + 1) * sizeof(Goal));
+    }
+
+    // Populate the new goal information
+    match->goals[match->goalCount].scorer = player;
+    match->goals[match->goalCount].time = time;
+
+    // Update the player's total goal count
+    player->totalGoals += 1;
+
+    // Increment the total goal count for the match
+    match->goalCount += 1;
+}
+
+/*HATTRICK*/
+
+int printHatTrickPlayers(Match *match)
+{
+    if (match == NULL || match->goalCount == 0)
+    {
+        return 0; // No goals in the match
+    }
+
+    Player **playerList = calloc(match->goalCount, sizeof(Player *)); // Tracks the players who have scored
+    int *goalCounter = calloc(match->goalCount, sizeof(int)); // Track goal counts per player
+    int tracker = 0; // How many unique players have been added to playerList
+
+    for (int i = 0; i < match->goalCount; i++)
+    {
+        Player *scorer = match->goals[i].scorer;
+        int found = 0;
+
+        // Check if the player is already in playerList by comparing player names or IDs
+        for (int j = 0; j < tracker; j++)
+        {
+            if (strcmp(playerList[j]->name, scorer->name) == 0) // Compare by name or use an ID
+            {
+                goalCounter[j]++;
+                found = 1;
+                break;
+            }
+        }
+
+        // If the player is not found, add them to playerList
+        if (!found)
+        {
+            playerList[tracker] = scorer;
+            goalCounter[tracker] = 1;
+            tracker++;
+        }
+    }
+
+    // Check for hat tricks and print players
+    int hatTrickFound = 0;
+
+    // Iterate through players and check if anyone has scored a hat trick
+    for (int i = 0; i < tracker; i++)
+    {
+        if (goalCounter[i] >= 3)
+        {
+            hatTrickFound = 1;
+        }
+    }
+
+    if (hatTrickFound)
+    {
+        printf("hat trick found in %s vs %s:\n", match->team1->name, match->team2->name);
+
+        // Iterate through players in team1 and print hat trick scorers
+        for (int k = 0; k < match->team1->playerCount; k++)
+        {
+            Player *player = match->team1->players[k];
+            // Check against goalCounter for hat trick within the match
+            for (int i = 0; i < tracker; i++) {
+                if (playerList[i] == player && goalCounter[i] >= 3) {
+                    printf("%s %d\n", player->name, goalCounter[i]);  // Print player and their goal count in this match
+                }
+            }
+        }
+
+        // Iterate through players in team2 and print hat trick scorers
+        for (int k = 0; k < match->team2->playerCount; k++)
+        {
+            Player *player = match->team2->players[k];
+            // Check against goalCounter for hat trick within the match
+            for (int i = 0; i < tracker; i++) {
+                if (playerList[i] == player && goalCounter[i] >= 3) {
+                    printf("%s %d\n", player->name, goalCounter[i]);  // Print player and their goal count in this match
+                }
+            }
+        }
+    }
+
+    free(playerList);
+    free(goalCounter);
+    return hatTrickFound;
+}
+
+/*this function receives the list of matches, match count, and two team names as strings. It returns
+a dynamically allocated MatchWinnerTeam struct that stores the winner of the match played by teams or
+indicates if it was a draw or not. */
+MatchWinnerTeam* getWinningTeam(Match *matches, int matchCount, char *team1Name, char *team2Name)
+{
+    for (int i = 0; i < matchCount; i++)
+    {
+        Match *match = &matches[i];
+
+        // Check if the match involves the given teams
+        if (strcmp(match->team1->name, team1Name) == 0 && strcmp(match->team2->name, team2Name) == 0) {
+            int team1Goals = 0, team2Goals = 0;
+
+            // Count goals for each team
+            for (int j = 0; j < match->goalCount; j++)
+            {
+                Player *scorer = match->goals[j].scorer;
+
+                // Check if the scorer belongs to team1
+                for (int k = 0; k < match->team1->playerCount; k++)
+                {
+                    if (match->team1->players[k] == scorer)
+                    {
+                        team1Goals++;
+                        break;
+                    }
+                }
+
+                // Check if the scorer belongs to team2
+                for (int k = 0; k < match->team2->playerCount; k++)
+                {
+                    if (match->team2->players[k] == scorer)
+                    {
+                        team2Goals++;
+                        break;
+                    }
+                }
+            }
+
+            // Allocate and return the result
+            MatchWinnerTeam *result = (MatchWinnerTeam*)malloc(sizeof(MatchWinnerTeam));
+            if (team1Goals > team2Goals)
+            {
+                result->winnerTeam = match->team1;
+                result->isDraw = 0;
+            }
+            else if (team2Goals > team1Goals)
+            {
+                result->winnerTeam = match->team2;
+                result->isDraw = 0;
+            }
+            else
+            {
+                result->winnerTeam = NULL;
+                result->isDraw = 1;
+            }
+            return result;
+        }
+    }
+
+    // If no match was found
+    return NULL;
+}
+
+/*this function returns the champion of the tournament*/
+Team* getChampion(Team **teamList, int teamCount, Match *matchList, int matchCount)
+{
+    int *points = (int*)calloc(teamCount, sizeof(int));
+
+    for (int i = 0; i < matchCount; i++)
+    {
+        MatchWinnerTeam *result = getWinningTeam(matchList, matchCount, matchList[i].team1->name, matchList[i].team2->name);
+        if (result)
+        {
+            //Check if draw and if there is give each team 1 point
+            if (result->isDraw)
+            {
+                for (int j = 0; j < teamCount; j++)
+                {
+                    if (teamList[j] == matchList[i].team1 || teamList[j] == matchList[i].team2)
+                    {
+                        points[j]++;
+                    }
+                }
+            }
+            else
+            {
+                //Check if there is a winner and if there is give the winner 3 points
+                for (int j = 0; j < teamCount; j++)
+                {
+                    if (teamList[j] == result->winnerTeam)
+                    {
+                        points[j] += 3;
+                        break;
+                    }
+                }
+            }
+            free(result);
+        }
+    }
+
+     //Find the team with the most points
+    int maxPoints = 0, championIndex = 0;
+    for (int i = 0; i < teamCount; i++)
+    {
+        if (points[i] > maxPoints)
+        {
+            maxPoints = points[i];
+            championIndex = i;
+        }
+    }
+
+    free(points);
+    return teamList[championIndex];
+}
+
+/*this function frees player, team, and match memory*/
+void freeMemory(Team **teamList, int teamCount, Player **playerList, int playerCount, Match *matches, int matchCount)
+{
+    for (int i = 0; i < playerCount; i++)
+    {
+        free(playerList[i]->name);
+        free(playerList[i]);
+    }
+    for (int i = 0; i < teamCount; i++)
+    {
+        free(teamList[i]->name);
+        free(teamList[i]->players);
+        free(teamList[i]);
+    }
+    for (int i = 0; i < matchCount; i++)
+    {
+        free(matches[i].goals);
+    }
+    free(playerList);
+    free(teamList);
+    free(matches);
+}
+
+//MAIN FUNCTION
+int main()
+{
+    int t, m, c;
+    scanf("%d %d %d", &t, &m, &c);
+
+    // Allocate memory for teams and players
+    Team **teamList = (Team**)malloc(t * sizeof(Team*));
+    Player **playerList = NULL;
+    int totalPlayers = 0;
+    char teamName[21],playerName[21];
+    char team1Name[21], team2Name[21];
+    int playerCount;
+    char scorerName[21];
+    int time;
+    char command[21];
+
+    // Read team data
+    for (int i = 0; i < t; i++)
+    {
+        scanf("%s %d", teamName, &playerCount);
+
+        teamList[i] = createTeam(teamName, playerCount);
+        for (int j = 0; j < playerCount; j++)
+        {
+            scanf("%s", playerName);
+
+            Player *player = createPlayer(playerName);
+            teamList[i]->players[j] = player;
+
+            playerList = (Player**)realloc(playerList, (totalPlayers + 1) * sizeof(Player*));
+            playerList[totalPlayers++] = player;
+        }
+    }
+
+    // Read match data
+    Match *matches = (Match*)malloc(m * sizeof(Match));
+    for (int i = 0; i < m; i++)
+    {
+        scanf("%s %s", team1Name, team2Name);
+
+        matches[i].team1 = getTeamByTeamName(teamList, t, team1Name);
+        matches[i].team2 = getTeamByTeamName(teamList, t, team2Name);
+        matches[i].goals = NULL;
+        matches[i].goalCount = 0;
+
+        while (scanf("%s", scorerName) && strcmp(scorerName, "end") != 0)
+        {
+            scanf("%d", &time);
+            Player *scorer = getPlayerByName(scorerName, playerList, totalPlayers);
+            recordGoal(&matches[i], scorer, time);
+        }
+    }
+
+    // Process commands
+    for (int i = 0; i < c; i++)
+    {
+        scanf("%s", command);
+
+        if (strcmp(command, "max_goal_player") == 0)
+        {
+            Player *maxPlayer = playerList[0];
+            for (int j = 1; j < totalPlayers; j++)
+            {
+                if (playerList[j]->totalGoals > maxPlayer->totalGoals)
+                {
+                    maxPlayer = playerList[j];
+                }
+            }
+            printf("player with max goal %s %d\n", maxPlayer->name, maxPlayer->totalGoals);
+        }
+        else if (strcmp(command, "winner") == 0)
+        {
+            char team1Name[21], team2Name[21];
+            scanf("%s %s", team1Name, team2Name);
+
+            MatchWinnerTeam *result = getWinningTeam(matches, m, team1Name, team2Name);
+            if (result)
+            {
+                if (result->isDraw == 1)
+                {
+                    printf("%s vs %s match drawn\n", team1Name, team2Name);
+                }
+                else
+                {
+                    printf("winner of %s vs %s is %s\n", team1Name, team2Name, result->winnerTeam->name);
+                }
+                free(result);
+            }
+            else
+            {
+                printf("no match between %s and %s\n", team1Name, team2Name);
+            }
+        }
+        else if (strcmp(command, "hattrick") == 0)
+        {
+            int hatttrick = 0;
+
+            // Iterate through all matches to check for hat tricks
+            for (int i = 0; i < m; i++)
+            {
+                int matchHatTrickFound = printHatTrickPlayers(&matches[i]);
+                if (matchHatTrickFound)
+                {
+                    hatttrick = 1;
+                }
+            }
+
+            if (!hatttrick)
+            {
+                printf("No hat trick found in the tournament.\n");
+            }
+        }
+        else if (strcmp(command, "champion") == 0)
+        {
+            Team *champion = getChampion(teamList, t, matches, m);
+            printf("champion is %s\n", champion->name);
+        }
+    }
+
+    // Free allocated memory
+    freeMemory(teamList, t, playerList, totalPlayers, matches, m);
+
+    return 0;
+}
